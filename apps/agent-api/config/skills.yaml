@@ -1,0 +1,15 @@
+version: 1
+skills:
+  crm.customer_insight:
+    allowed_tools:
+      - crm.get_customer_overview
+      - crm.list_open_tickets
+      - knowledge.search_sop
+    risk_level: read_only
+  crm.followup_workflow:
+    allowed_tools:
+      - crm.get_customer_overview
+      - crm.list_open_tickets
+      - knowledge.search_sop
+      - workflow.create_followup_plan
+    risk_level: approval_required
