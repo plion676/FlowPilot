@@ -1,0 +1,13 @@
+name: opspilot-rag
+services:
+  qdrant:
+    image: ${QDRANT_IMAGE:-qdrant/qdrant:v1.17.0}
+    container_name: opspilot-qdrant-dev
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - sop-qdrant-data:/qdrant/storage
+    restart: unless-stopped
+volumes:
+  sop-qdrant-data:
+    name: opspilot-sop-qdrant-data

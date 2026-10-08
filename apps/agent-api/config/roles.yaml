@@ -1,0 +1,14 @@
+version: 1
+roles:
+  consultant:
+    bound_tools:
+      - crm.get_customer_overview
+      - crm.list_open_tickets
+      - knowledge.search_sop
+      - workflow.create_followup_plan
+    direct_tools:
+      - crm.get_customer_overview
+      - crm.list_open_tickets
+    allowed_skills:
+      - crm.customer_insight
+      - crm.followup_workflow

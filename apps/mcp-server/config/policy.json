@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "contract_fingerprint": "d89d38bdd0109fb2cbaf9b02e97dfbcc7899d1555d361f916a40de6a9a5133ec",
+  "roles": {
+    "consultant": {
+      "bound_tools": ["crm.get_customer_overview", "crm.list_open_tickets", "knowledge.search_sop", "workflow.create_followup_plan"],
+      "direct_tools": ["crm.get_customer_overview", "crm.list_open_tickets"],
+      "allowed_skills": ["crm.customer_insight", "crm.followup_workflow"]
+    }
+  },
+  "skills": {
+    "crm.customer_insight": {
+      "allowed_tools": ["crm.get_customer_overview", "crm.list_open_tickets", "knowledge.search_sop"],
+      "risk_level": "read_only"
+    },
+    "crm.followup_workflow": {
+      "allowed_tools": ["crm.get_customer_overview", "crm.list_open_tickets", "knowledge.search_sop", "workflow.create_followup_plan"],
+      "risk_level": "approval_required"
+    }
+  }
+}
