@@ -48,7 +48,19 @@ const contextSchema = z.strictObject({
   contract_fingerprint: z.string(),
   issued_at: z.number().int(),
   expires_at: z.number().int(),
+  task_grant: z
+    .strictObject({
+      task_id: z.uuid(),
+      version: z.number().int().positive(),
+      lease_token: z.string().regex(/^[a-f0-9]{64}$/),
+    })
+    .optional(),
 });
+export type TaskExecutionContext = z.infer<typeof contextSchema>;
+export type TaskGrantReader = (
+  context: TaskExecutionContext,
+  operation: string,
+) => Promise<void>;
 
 type Policy = z.infer<typeof policySchema>;
 
@@ -131,6 +143,7 @@ export function signedExecutionGate(
   readBinding?: BindingReader,
   ownEndpointId = "business",
   ownRoleId?: string,
+  readTaskGrant?: TaskGrantReader,
 ): ExecutionGate {
   return {
     async assertAllowed(toolName, arguments_): Promise<void> {
@@ -188,13 +201,30 @@ export function signedExecutionGate(
           const skill = policy.skills[context.skill_name];
           if (
             !skill ||
-            context.skill_name !== "crm.customer_insight" ||
+            !["crm.customer_insight", "crm.followup_workflow"].includes(
+              context.skill_name,
+            ) ||
             !policy.roles[context.role]?.allowed_skills.includes(
               context.skill_name,
             )
           )
             throw new Error("FORBIDDEN_SKILL");
-          if (skill.risk_level !== "read_only")
+          if (context.skill_name === "crm.followup_workflow") {
+            if (!context.task_grant || !readTaskGrant)
+              throw new Error("APPROVAL_REQUIRED");
+            if (
+              toolName === "workflow.create_followup_plan" &&
+              context.task_grant.task_id !== arguments_.task_id
+            )
+              throw new Error("INVALID_BINDING");
+            await readTaskGrant(
+              context,
+              toolName === "workflow.create_followup_plan" &&
+                arguments_.operation === "commit"
+                ? "commit"
+                : "propose",
+            );
+          } else if (skill.risk_level !== "read_only")
             throw new Error("APPROVAL_REQUIRED");
           allowed = allowed.filter((name) =>
             skill.allowed_tools.includes(name),
@@ -218,7 +248,10 @@ export function signedExecutionGate(
           !contract
         )
           throw new Error("FORBIDDEN_TOOL");
-        if (contract.riskLevel !== "read_only")
+        if (
+          contract.riskLevel !== "read_only" &&
+          context.skill_name !== "crm.followup_workflow"
+        )
           throw new Error("APPROVAL_REQUIRED");
         return;
       }

@@ -86,6 +86,6 @@ test("managed insight binding is a strict subset, never grants MES or unbound SO
       all,
       "crm.followup_workflow",
     ).assertAllowed("knowledge.search_sop", args),
-    /FORBIDDEN_SKILL/,
+    /APPROVAL_REQUIRED/,
   );
 });

@@ -1,6 +1,6 @@
 # OpsPilot：MVP 技术设计
 
-> 2026-10-08 现行聊天与工具管理设计见 [工具管理变更规格](docs/changes/tool-management.md)，SOP/Skill 实现见 [客户洞察增量](docs/changes/customer-insight.md)。绑定以 MySQL 为事实来源；Agent 与 MCP 实时读取同一配置；所有聊天进入统一 ReAct。Task 和全栈部署章节仍是后续目标，当前实现范围见根目录 README。
+> 2026-10-09 现行聊天与工具管理设计见 [工具管理变更规格](docs/changes/tool-management.md)，SOP/Skill 实现见 [客户洞察增量](docs/changes/customer-insight.md)，Task 现行实现见 [回访工作流](docs/changes/followup-workflow.md)。Task/决策/审计复用 Go/GORM/MySQL，最终写入与完成原子提交；Python 编排 Worker。所有聊天进入统一 ReAct，没有前置意图 Router。本文后续 Task 细节是原设计记录，有差异时以上述增量规格为准；全栈部署仍待实现。
 
 > Endpoint 现行设计：[角色 Endpoint 修正](docs/changes/role-endpoints.md)。连接按 `role_id` 归属；角色只能绑定本角色连接，再选择其中的工具。CRM/MES 仍是连接内部的 Tool 领域。旧领域分类设计保留历史记录，不作为当前实现依据。
 
@@ -353,6 +353,8 @@ Agent 的 `/internal/rag/search` 和 `/internal/tasks/{id}/write-authorization` 
 
 ## 10. 测试与评测策略
 
+2026-10-09 评测设计补充见 [顾问 Agent 评测驱动开发与学习设计](docs/changes/consultant-evaluation-design.md)。已给出客户洞察的业务标准 v0.1、七个评分项、三条场景及独立评测环境契约；包括时钟、数据/绑定/SOP 版本、逐 Trial 恢复与预检。下一步设计基线报告和门控；环境控制与运行器尚未实现。
+
 ### 10.1 测试层次
 
 | 层次 | 目标 | 核心用例 |
@@ -362,14 +364,16 @@ Agent 的 `/internal/rag/search` 和 `/internal/tasks/{id}/write-authorization` 
 | Go 单元/集成测试 | GORM 查询、种子数据、草稿/提交领域规则。 | 只取 open 工单；不符合资格不能提交；唯一约束防重复计划。 |
 | 服务集成测试 | Agent—MCP—Go—MySQL—Qdrant 边界。 | 四个请求、服务超时、重新校验、审批前零写入。 |
 | 浏览器端到端测试 | UI 可见性和用户操作。 | 聊天、快捷操作、引用片段、Task 轮询和批准/拒绝/取消。 |
-| 评测运行器 | 30+ 固定问题的可复现事实。 | 断言 route、允许/拒绝、必要引用、Task 状态及写入副作用。 |
+| 能力评测运行器（待实现） | 真实模型在固定场景与环境中的业务完成能力。 | 30+ 版本化样本；综合实际调用、回答、语义依据、Task 最终状态与写入副作用。 |
 
 ### 10.2 隔离原则
 
 - 单元测试使用确定性假 MCP Client、假时钟、内存/临时数据库；不调用真实 LLM。
-- 集成和 E2E 使用 compose 测试栈与固定种子；所有 LLM 生成节点可注入固定结构化响应，保证评测无网络、无随机性。
-- 单独标记真实 LLM 冒烟测试，不将其计入离线评测通过数。
-- 评测每项记录：输入、预期 `route`、预期 Tool/Skill、预期结果类别、引用要求、Task 预期状态及实际输出摘要。
+- 集成和 E2E 的工程规则测试可使用固定种子与注入的结构化模型响应，验证授权、引用和审批；不据此报告真实模型的选择或建议能力。Compose 测试栈仍是待实现设计。
+- 离线能力评测使用真实模型及固定样本、评分标准、执行环境，可以调用模型 API。“离线”指不使用线上用户流量，不等于无网络或使用假模型。
+- 真实模型冒烟、工程规则测试和正式能力评测分别报告；单次冒烟不替代版本化样本上的多次回测。
+- 评测每项记录：输入、环境前提、预期业务行为与最终状态、评分项及证据；必要工具集合不强制无业务理由的固定顺序。`route.kind=agent` 只是运行方式标签，不能证明任务成功。
+- 每轮记录 Agent、样本、评分标准与环境版本；保留逐 Trial 结果、原始 Trace 与业务状态，校准语义评分，区分失败、跳过与无法判定。
 - 评测结果由脚本生成 JSON/Markdown，不手工编辑通过率。
 
 ## 11. Docker Compose 与运行时配置

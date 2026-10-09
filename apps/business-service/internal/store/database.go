@@ -22,7 +22,10 @@ func OpenMySQLFromEnv() (*gorm.DB, error) {
 }
 
 func Migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&Customer{}, &Ticket{}, &WorkOrder{}, &FollowupPlanDraft{}, &FollowupPlan{}, &AgentProfile{}, &AgentBindingAudit{}, &MCPEndpoint{}, &AgentEndpointBinding{}, &AgentToolBinding{}, &MCPEndpointCheck{}, &MCPEndpointAudit{}, &ConfigMigration{}); err != nil {
+	if err := db.AutoMigrate(&TraceRun{}, &TraceEvent{}); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(&AgentTask{}, &TaskDecision{}, &TaskAudit{}, &Customer{}, &Ticket{}, &WorkOrder{}, &FollowupPlanDraft{}, &FollowupPlan{}, &AgentProfile{}, &AgentBindingAudit{}, &MCPEndpoint{}, &AgentEndpointBinding{}, &AgentToolBinding{}, &MCPEndpointCheck{}, &MCPEndpointAudit{}, &ConfigMigration{}); err != nil {
 		return err
 	}
 	// Startup must never restore a tool that an administrator removed.

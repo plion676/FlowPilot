@@ -10,11 +10,12 @@ from app.policy.config_models import load_policy_config
 from app.tools.registry import default_tool_registry
 
 INSIGHT = "crm.customer_insight"
+FOLLOWUP = "crm.followup_workflow"
 
 
 class SkillActivation(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    skill_name: Literal["crm.customer_insight"]
+    skill_name: Literal["crm.customer_insight", "crm.followup_workflow"]
 
 
 class SkillRegistry:
@@ -29,13 +30,13 @@ class SkillRegistry:
         role_definition = self.policy.roles.get(role)
         if not definition or not role_definition or name not in role_definition.allowed_skills:
             raise AppError("FORBIDDEN_SKILL", "当前角色无权启用这个 Skill。", 403)
-        if name != INSIGHT or definition.risk_level != "read_only":
+        if name not in {INSIGHT, FOLLOWUP}:
             raise AppError("SKILL_NOT_READY", "此 Skill 的审批流程尚未接通。", 503)
         return definition
 
-    def ready(self, role: str, catalog: list[dict]) -> bool:
+    def ready(self, role: str, catalog: list[dict], name: str = INSIGHT) -> bool:
         try:
-            definition = self.resolve(role, INSIGHT)
+            definition = self.resolve(role, name)
         except AppError:
             return False
         return set(definition.allowed_tools) <= {

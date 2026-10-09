@@ -20,6 +20,7 @@ class AllowedToolBinding:
     binding_version: int | None = None
     endpoint_id: str | None = None
     endpoint_revision: int | None = None
+    task_grant: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)

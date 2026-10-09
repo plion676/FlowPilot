@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { ToolManager } from "./ToolManager";
 import { EndpointManager } from "./EndpointManager";
+import { TaskPanel } from "./TaskPanel";
+import { TracePage } from "./TracePage";
 import {
   ApiRequestError,
   getHealth,
@@ -153,7 +155,7 @@ const actions = [
     title: "回访计划",
     description: "筛选高风险客户，进入人工确认流程",
     prompt: "为未来 7 天到期且高风险的客户生成回访计划",
-    available: false,
+    available: true,
   },
 ];
 
@@ -316,20 +318,21 @@ function EvidencePanel({
         </div>
         {task ? (
           <div className="task-card">
-            <span className="task-status">{task.status ?? "状态未知"}</span>
+            <span className="task-status">任务已提交</span>
             <strong>{task.task_id ?? task.id ?? "未提供任务编号"}</strong>
-            <p>任务操作尚未在此版本开放，请以服务端状态为准。</p>
+            <p>实时状态见下方任务列表，可审查提案、确认或取消。</p>
           </div>
         ) : (
           <div className="context-empty compact">
             <span className="empty-illustration">
               <Icon name="calendar" size={24} />
             </span>
-            <strong>暂无进行中的任务</strong>
-            <p>回访计划与人工确认流程仍在开发中。</p>
+            <strong>当前消息未创建任务</strong>
+            <p>回访提案生成后，需要人工确认才会保存正式计划。</p>
           </div>
         )}
       </section>
+      <TaskPanel refreshKey={task?.task_id} />
       <div className="panel-footer">
         <Icon name="shield" size={17} />
         <span>权限由 Agent API 与 MCP Server 双重校验</span>
@@ -351,11 +354,46 @@ function EvidencePanel({
 }
 
 export function App() {
-  const [page, setPage] = useState<"chat" | "tools" | "endpoints">("chat");
+  const initialTrace = window.location.hash.match(/^#trace\/([a-f0-9-]{36})$/i)?.[1] ?? null;
+  const [page, setPage] = useState<"chat" | "tools" | "endpoints" | "traces">(
+    window.location.hash.startsWith("#trace") ? "traces" : "chat",
+  );
+  const [selectedTrace, setSelectedTrace] = useState<string | null>(initialTrace);
   const [managementDirty, setManagementDirty] = useState(false);
-  function navigate(next: "chat" | "tools" | "endpoints") {
+  useEffect(() => {
+    function onHashChange() {
+      const hash = window.location.hash;
+      const next = hash.startsWith("#trace") ? "traces" : hash === "#top" ? "chat" : null;
+      if (!next) return;
+      if (page !== next && managementDirty && !window.confirm("放弃管理页面未保存的修改？")) {
+        window.history.replaceState(
+          null,
+          "",
+          page === "traces" ? (selectedTrace ? `#trace/${selectedTrace}` : "#trace") : "#top",
+        );
+        return;
+      }
+      setPage(next);
+      if (next === "traces")
+        setSelectedTrace(hash.match(/^#trace\/([a-f0-9-]{36})$/i)?.[1] ?? null);
+    }
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [page, managementDirty, selectedTrace]);
+  function navigate(next: "chat" | "tools" | "endpoints" | "traces") {
     if (page !== next && managementDirty && !window.confirm("放弃管理页面未保存的修改？")) return;
     setPage(next);
+    window.history.replaceState(
+      null,
+      "",
+      next === "traces" ? (selectedTrace ? `#trace/${selectedTrace}` : "#trace") : "#top",
+    );
+  }
+  function openTrace(id: string) {
+    if (managementDirty && !window.confirm("放弃管理页面未保存的修改？")) return;
+    setSelectedTrace(id);
+    setPage("traces");
+    window.history.replaceState(null, "", `#trace/${id}`);
   }
   const [draft, setDraft] = useState("");
   const [draftSkill, setDraftSkill] = useState<string | null>(null);
@@ -468,6 +506,13 @@ export function App() {
             <Icon name="grid" size={19} />
             <span>MCP 连接</span>
           </button>
+          <button
+            className={`nav-item page-nav ${page === "traces" ? "active" : ""}`}
+            onClick={() => navigate("traces")}
+          >
+            <Icon name="chart" size={19} />
+            <span>执行 Trace</span>
+          </button>
           <a className="nav-item" href="#quick-actions" onClick={() => navigate("chat")}>
             <Icon name="spark" size={19} />
             <span>快捷操作</span>
@@ -492,7 +537,13 @@ export function App() {
           <div className="breadcrumb">
             工作空间 <span>/</span>{" "}
             <strong>
-              {page === "chat" ? "运营工作台" : page === "tools" ? "角色工具绑定" : "MCP 连接"}
+              {page === "chat"
+                ? "运营工作台"
+                : page === "tools"
+                  ? "角色工具绑定"
+                  : page === "traces"
+                    ? "执行 Trace"
+                    : "MCP 连接"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -502,7 +553,9 @@ export function App() {
             <span className="topbar-avatar">C</span>
           </div>
         </header>
-        {page === "endpoints" ? (
+        {page === "traces" ? (
+          <TracePage selectedId={selectedTrace} onSelect={openTrace} />
+        ) : page === "endpoints" ? (
           <EndpointManager onDirtyChange={setManagementDirty} />
         ) : page === "tools" ? (
           <ToolManager onDirtyChange={setManagementDirty} />
@@ -575,7 +628,11 @@ export function App() {
                       action.available &&
                       selectAction(
                         action.prompt,
-                        action.id === "insight" ? "crm.customer_insight" : null,
+                        action.id === "insight"
+                          ? "crm.customer_insight"
+                          : action.id === "followup"
+                            ? "crm.followup_workflow"
+                            : null,
                       )
                     }
                     disabled={!action.available}
@@ -694,6 +751,19 @@ export function App() {
                               <div className="response-meta">
                                 请求 ID <code>{item.response.request_id}</code>
                               </div>
+                              {item.response.trace_id && (
+                                <button
+                                  className="trace-link"
+                                  onClick={() => openTrace(item.response!.trace_id!)}
+                                >
+                                  查看本轮 Trace →
+                                </button>
+                              )}
+                              {item.response.trace_incomplete && (
+                                <p className="trace-warning">
+                                  Trace 采集不完整，业务响应不受影响。
+                                </p>
+                              )}
                             </div>
                           </div>
                         ) : item.error ? (
@@ -711,6 +781,14 @@ export function App() {
                                   {item.error.requestId ? ` · 请求 ID ${item.error.requestId}` : ""}
                                 </span>
                               </div>
+                              {item.error.traceId && (
+                                <button
+                                  className="trace-link"
+                                  onClick={() => openTrace(item.error!.traceId!)}
+                                >
+                                  查看失败 Trace →
+                                </button>
+                              )}
                             </div>
                           </div>
                         ) : (
@@ -736,13 +814,15 @@ export function App() {
                 <form className="composer" onSubmit={handleSubmit}>
                   {draftSkill && (
                     <div className="management-notice">
-                      客户洞察模式 · 需要绑定客户概览、开放工单与 SOP 检索
+                      {draftSkill === "crm.followup_workflow"
+                        ? "回访提案模式 · 保存正式计划需要人工确认"
+                        : "客户洞察模式 · 需要绑定客户概览、开放工单与 SOP 检索"}
                       <button
                         type="button"
                         className="secondary-button"
                         onClick={() => setDraftSkill(null)}
                       >
-                        退出洞察模式
+                        {draftSkill === "crm.followup_workflow" ? "退出回访模式" : "退出洞察模式"}
                       </button>
                     </div>
                   )}

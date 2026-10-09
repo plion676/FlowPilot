@@ -68,6 +68,8 @@ def signed_headers(
     if binding.endpoint_id:
         context["endpoint_id"] = binding.endpoint_id
         context["endpoint_revision"] = binding.endpoint_revision
+    if binding.task_grant is not None:
+        context["task_grant"] = binding.task_grant
     payload = json.dumps(context, ensure_ascii=False, separators=(",", ":")).encode()
     encoded = base64.urlsafe_b64encode(payload).decode().rstrip("=")
     signature = hmac.new(secret.encode(), encoded.encode(), hashlib.sha256).hexdigest()
@@ -163,6 +165,15 @@ class OfficialMcpClient:
                 if result.content and hasattr(result.content[0], "text")
                 else ""
             )
+            if code in {
+                "TASK_EXPIRED",
+                "TASK_CONFLICT",
+                "LEASE_LOST",
+                "CUSTOMER_CHANGED",
+                "CANDIDATE_LIMIT_REACHED",
+                "INVALID_ARGUMENTS",
+            }:
+                raise AppError(code, "任务状态或客户条件已变化，请查看任务记录后重新提交。", 409)
             if code in {"SOP_INDEX_NOT_READY", "EMBEDDING_UNAVAILABLE", "INVALID_SOP_EVIDENCE"}:
                 raise AppError(code, "SOP 检索尚不可用，请检查索引和本地模型。", 503)
             if code == "NOT_FOUND":

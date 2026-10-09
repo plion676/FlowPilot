@@ -130,7 +130,7 @@ def default_tool_registry() -> ToolRegistry:
                 "approval_required",
                 FollowupArguments,
                 "workflow.create_followup_plan",
-                available=False,
+                available=True,
             ),
         )
     )

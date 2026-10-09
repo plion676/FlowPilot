@@ -200,6 +200,7 @@ class ToolManagementService:
         arguments: dict,
         *,
         skill_name: str | None = None,
+        task_grant: dict | None = None,
     ) -> tuple[dict, AllowedToolBinding, Endpoint]:
         current = await self.bindings.get(snapshot.role, str(snapshot.request_id))
         if current.version != snapshot.binding_version or set(current.tools) != snapshot.tools:
@@ -221,7 +222,9 @@ class ToolManagementService:
         spec = self.registry.get(ref.tool_name)
         if spec is None:
             raise AppError("FORBIDDEN_TOOL", "工具未注册。", 403)
-        if spec.risk_level == "approval_required":
+        if spec.risk_level == "approval_required" and (
+            skill_name != "crm.followup_workflow" or not task_grant
+        ):
             raise AppError("APPROVAL_REQUIRED", "写操作仍需要人工确认。", 403)
         if not spec.available:
             raise AppError("TOOL_NOT_READY", "工具尚未接通。", 503)
@@ -233,6 +236,7 @@ class ToolManagementService:
             request_id=snapshot.request_id,
             role=snapshot.role,
             route="agent",
+            task_grant=task_grant,
             skill_name=skill_name,
             binding_version=snapshot.binding_version,
             endpoint_id=endpoint.id,

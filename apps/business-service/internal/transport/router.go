@@ -43,6 +43,8 @@ func NewRouter(db *gorm.DB, serviceToken string) *gin.Engine {
 	})
 	registerAgentRoutes(internal, db)
 	registerEndpointRoutes(internal, db)
+	registerTaskRoutes(internal, db)
+	registerTraceRoutes(internal, db)
 	internal.GET("/crm/customers/:customer_code", func(c *gin.Context) {
 		code := c.Param("customer_code")
 		if !customerCodePattern.MatchString(code) {

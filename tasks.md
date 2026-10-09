@@ -1,8 +1,10 @@
 # OpsPilot：MVP 实施任务清单
 
-当前新增任务 M1–M4 见 [工具管理变更规格](docs/changes/tool-management.md)。历史已完成的 Router 任务仅记录当时实现，新聊天入口由统一 ReAct 与可管理的工具绑定替代。
+当前新增任务 F1–F4 见 [回访工作流](docs/changes/followup-workflow.md)，M1–M4 见 [工具管理变更规格](docs/changes/tool-management.md)。历史已完成的 Router 任务仅记录当时实现，新聊天入口由统一 ReAct 与可管理的工具绑定替代。回访持久化改为复用 Go/GORM/MySQL；不依赖尚未实现的 Redis 缓存，17–20 的现行文件与依赖以上述增量为准。
 
 Endpoint 现行角色归属修正及 R1–R3 验证见 [角色 Endpoint 修正](docs/changes/role-endpoints.md)；[E1–E5](docs/changes/mcp-endpoints-tasks.md) 保留旧领域连接版本的历史记录。
+
+2026-10-09 顾问评测采用助手示范讲解并推进设计，见 [评测驱动开发与学习设计](docs/changes/consultant-evaluation-design.md)。已有客户洞察标准、三条场景和独立评测环境契约，尚需校准、基线/门控设计与实现；第 22 项仍未完成。固定响应的工程测试和真实模型能力评测须分别记录。
 
 ## 1. 执行规则
 
@@ -117,8 +119,8 @@ flowchart LR
   - 依赖：1。
   - 对应：REQ-DATA-01–04、REQ-RUN-01。
 
-- [ ] **10. 实现 Go 限定 REST 业务接口与领域校验**（3–4 小时）
-  - 当前进度：三条只读接口及服务令牌/请求标识校验已完成；回访草稿和审批后提交接口待完成。
+- [x] **10. 实现 Go 限定 REST 业务接口与领域校验**（3–4 小时）
+  - 已实现：三个只读接口、固定回访 propose/commit 内部接口，角色/租约/人工决策/资格校验和原子写入；确认前真实 MySQL 计划数为零。
   - 实现客户概览、开放工单、MES 工单读取以及回访草稿创建/提交的内部接口。
   - 禁止通用查询；计划提交必须满足有效服务身份、资格、审批证明与 `task_id + customer_id` 幂等约束。
   - 涉及文件：`internal/crm/`、`internal/mes/`、`internal/workflow/`、`internal/transport/`、测试文件。
@@ -134,8 +136,8 @@ flowchart LR
   - 依赖：1、5。
   - 对应：REQ-POLICY-05、技术约束、REQ-TEST-01。
 
-- [ ] **12. 接通 MCP 二次策略校验与 Go 业务适配**（3–4 小时）
-  - 当前进度：只读工具已完成签名上下文、MCP 本地策略镜像/Schema/契约指纹校验、Go 固定 REST 和 RAG 适配；客户洞察最小集合在 API/MCP 双侧校验。工作流审批写入仍待后续任务，故本项未全部完成。
+- [x] **12. 接通 MCP 二次策略校验与 Go 业务适配**（3–4 小时）
+  - 已实现：签名 v2、动态来源/角色绑定、Skill 最小交集、固定 Go/RAG 适配；回访 task_grant 在 MCP 独立验证，Go 再次验证并原子提交。MES 依现行手动绑定决定，不再静态禁止 consultant 的 MES。
   - 将 MCP Tool 映射到 Go 内部 REST，加载策略镜像并校验签名调用上下文、过期时间、Role/Skill/Tool 交集和参数。
   - 增加启动期策略版本、Tool Schema 指纹一致性检查；拒绝来自 Web/模型的伪造上下文。
   - 涉及文件：`mcp-server/src/{policy,clients,tools}`、共享契约 Fixture、测试文件。
@@ -181,7 +183,8 @@ flowchart LR
 
 ### 里程碑 E：异步任务、人工确认与审计
 
-- [ ] **17. 实现 Task、审批与审计持久化模型**（3–4 小时）
+- [x] **17. 实现 Task、审批与审计持久化模型**（3–4 小时）
+  - 已实现：Go `internal/store/tasks.go` 持久化状态、幂等决策、租约与审计，Python 固定内部 Task Client。终态、过期、跨用户、恢复与非法跳转有测试。
   - 创建 Agent 侧迁移和 Repository：`agent_tasks`、`task_approvals`、`audit_events`；实现状态转换与乐观锁。
   - 规定合法状态转换、Task TTL、终态不变性和追加式审计。
   - 涉及文件：`tasks/{models,repository,state_machine}.py`、`audit/`、迁移、测试文件。
@@ -189,7 +192,8 @@ flowchart LR
   - 依赖：2、6、9。
   - 对应：REQ-WF-06–10、REQ-SAFE-03–04、REQ-TEST-01。
 
-- [ ] **18. 实现回访工作流的 ReAct 提案阶段**（3–4 小时）
+- [x] **18. 实现回访工作流的 ReAct 提案阶段**（3–4 小时）
+  - 已实现：`app/tasks/worker.py` 受限四工具 ReAct，Go 筛选/固定窗口/草稿；引用账本校验。固定模型驱动真实 MySQL/MCP/Qdrant 联调已通过。
   - 构建回访 LangGraph 外壳并计算 `[today, today+7]`（含两端）窗口；在其中运行注入四个绑定 Tool 的 ReAct Agent，由 `workflow.create_followup_plan(operation=propose)` 的 Go 业务逻辑按高风险与到期窗口筛选候选、创建内部草稿，再用客户/工单/SOP Tool 丰富提案并落库 Task。
   - 无候选时产生 `completed_empty`，不得创建草稿或计划；有候选时转 `pending_approval`。
   - 涉及文件：`agent/graphs/followup.py`、`tasks/service.py`、MCP Tool 调用、集成测试。
@@ -197,7 +201,8 @@ flowchart LR
   - 依赖：12、13、15、17。
   - 对应：REQ-WF-01–06、REQ-INSIGHT-04、REQ-TEST-02。
 
-- [ ] **19. 实现批准、拒绝、取消与批准后提交**（3–4 小时）
+- [x] **19. 实现批准、拒绝、取消与批准后提交**（3–4 小时）
+  - 已实现：`POST /api/tasks/{id}/decision`，必须指定决策、任务预期版本与幂等键；MCP 独立校验 task_grant，Go 原子重校验/CRM 写入/完成任务。测试覆盖拒绝、取消、过期、撤权、客户变化、伪造证明与重复确认。
   - 实现 Task 查询、批准、拒绝、取消 API；批准路径生成一次性审批证明、重新校验资格与草稿，再经 MCP `commit` 写入。
   - 在 MCP 与 Go 两侧验证证明、Task 版本、审批状态、草稿有效期及幂等约束。
   - 涉及文件：`api/tasks.py`、`tasks/approval.py`、MCP workflow Tool、Go workflow 服务、E2E 测试。
@@ -207,8 +212,8 @@ flowchart LR
 
 ### 里程碑 F：Web、验证、发布准备
 
-- [ ] **20. 实现 React 最小界面与 Task 轮询**（3–4 小时）
-  - 当前进度：React + TypeScript 前端可运行，已接通只读查询、客户洞察快捷入口、聊天、工具记录、结构化数据、错误与请求 ID；引用卡片展示服务端校验的编号/版本/来源/原文。回访计划入口仍标为未接通；Task API/轮询与审批交互未实现，因此本项仍未完成。
+- [x] **20. 实现 React 最小界面与 Task 轮询**（3–4 小时）
+  - 已实现：`TaskPanel.tsx` 1.5 秒轮询、候选/分析/片段、确认对话框、批准/拒绝/取消和持久化审计展示；10 个前端测试与 TypeScript 构建通过。
   - 实现聊天、四个快捷操作、路由/结果展示、引用来源卡片和 Task 状态面板。
   - Task 状态使用轮询；只显示后端已授权的批准、拒绝、取消操作。
   - 涉及文件：`apps/web/src/{features/chat,features/tasks,components,api}`、组件测试。

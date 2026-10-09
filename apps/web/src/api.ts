@@ -10,7 +10,59 @@ export type Citation = {
   source_path?: string;
 };
 
+export type FollowupTask = {
+  task_id: string;
+  status: string;
+  version: number;
+  window_start: string;
+  window_end: string;
+  endpoint_id: string;
+  error_code: string;
+  expires_at: string;
+  proposal: {
+    candidates?: {
+      customer_code: string;
+      renewal_date: string;
+      risk_level: string;
+      action: string;
+      due_date: string;
+    }[];
+    analysis?: string;
+    citations?: Citation[];
+  };
+  result: { plan_count?: number; plan_ids?: string[] };
+};
+export const getTasks = async (signal?: AbortSignal): Promise<FollowupTask[]> => {
+  const result = await managementTaskRequest<{ tasks: FollowupTask[] }>("", { signal });
+  return Array.isArray(result.tasks) ? result.tasks : [];
+};
+export const taskDecision = (task: FollowupTask, decision: string, key: string) =>
+  managementTaskRequest<FollowupTask>(`/${task.task_id}/decision`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision, expected_version: task.version, idempotency_key: key }),
+  });
+export const taskAudit = (id: string) =>
+  managementTaskRequest<{
+    events: { id: string; event: string; version: number; created_at: string }[];
+  }>(`/${id}/audit`);
+async function managementTaskRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`/api/tasks${path}`, {
+    ...init,
+    headers: { "X-Demo-Role": "consultant", ...init?.headers },
+  });
+  const payload = await response.json();
+  if (!response.ok)
+    throw new ApiRequestError(
+      payload.error?.message ?? "任务服务暂不可用。",
+      payload.error?.code ?? `HTTP_${response.status}`,
+    );
+  return payload as T;
+}
+
 export type ChatResponse = {
+  trace_id?: string | null;
+  trace_incomplete?: boolean;
   request_id: string;
   message: string;
   model: string;
@@ -77,12 +129,60 @@ export type ManagedTool = {
 
 export type HealthResponse = { status: string; llm: string };
 
+export type TraceRun = {
+  trace_id: string;
+  request_id: string;
+  role: string;
+  summary: string;
+  model: string;
+  status: string;
+  incomplete: boolean;
+  error_code: string;
+  last_sequence: number;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+};
+export type TraceEvent = {
+  sequence: number;
+  event_id: string;
+  kind: string;
+  step: number;
+  call_id: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+async function traceRequest<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`/api/traces${path}`, {
+    signal,
+    headers: { "X-Demo-Role": "consultant" },
+  });
+  const result = await response.json();
+  if (!response.ok)
+    throw new ApiRequestError(
+      result.error?.message ?? "Trace 暂不可用",
+      result.error?.code ?? `HTTP_${response.status}`,
+    );
+  return result as T;
+}
+export const getTraces = (search: string, offset: number, signal?: AbortSignal) =>
+  traceRequest<{ traces: TraceRun[]; has_more: boolean }>(
+    `?search=${encodeURIComponent(search)}&offset=${offset}`,
+    signal,
+  );
+export const getTrace = (id: string, after: number, signal?: AbortSignal) =>
+  traceRequest<{ trace: TraceRun; events: TraceEvent[]; has_more: boolean }>(
+    `/${encodeURIComponent(id)}?after_sequence=${after}`,
+    signal,
+  );
+
 export class ApiRequestError extends Error {
   constructor(
     message: string,
     public readonly code: string,
     public readonly requestId?: string,
     public readonly retryable = false,
+    public readonly traceId?: string,
   ) {
     super(message);
     this.name = "ApiRequestError";
@@ -111,6 +211,7 @@ export async function sendChat(
       typeof error.code === "string" ? error.code : `HTTP_${response.status}`,
       typeof error.request_id === "string" ? error.request_id : undefined,
       error.retryable === true,
+      response.headers.get("X-Trace-ID") ?? undefined,
     );
   }
   if (

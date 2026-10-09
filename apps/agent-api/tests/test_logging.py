@@ -8,3 +8,10 @@ def test_redact_hides_secret_fields_recursively() -> None:
         "api_key": "[REDACTED]",
         "nested": {"token": "[REDACTED]"},
     }
+
+
+def test_task_execution_proofs_are_redacted():
+    assert redact({"task_grant": {"lease_token": "private"}, "lease_hash": "private"}) == {
+        "task_grant": "[REDACTED]",
+        "lease_hash": "[REDACTED]",
+    }

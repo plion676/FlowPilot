@@ -21,6 +21,8 @@ class ToolCallRecord(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    trace_id: str | None = None
+    trace_incomplete: bool = False
     request_id: str
     message: str
     model: str

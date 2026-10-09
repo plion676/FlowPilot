@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   goBindingReader,
+  goTaskGrantReader,
   goReadBackend,
   unavailableBackend,
 } from "./backend.js";
@@ -80,6 +81,7 @@ const httpServer = createServer(async (request, response) => {
         goBindingReader(businessUrl, serviceToken, endpoint.id),
         endpoint.id,
         endpoint.role_id,
+        goTaskGrantReader(businessUrl, serviceToken),
       )
     : denyAllGate;
   let requestId = "00000000-0000-4000-8000-000000000000";
@@ -98,7 +100,23 @@ const httpServer = createServer(async (request, response) => {
     }
   }
   const backend = endpointEnabled
-    ? goReadBackend(businessUrl, serviceToken, requestId)
+    ? goReadBackend(
+        businessUrl,
+        serviceToken,
+        requestId,
+        undefined,
+        typeof context === "string"
+          ? (() => {
+              try {
+                return JSON.parse(
+                  Buffer.from(context, "base64url").toString("utf8"),
+                );
+              } catch {
+                return undefined;
+              }
+            })()
+          : undefined,
+      )
     : unavailableBackend;
   const server = createMcpServer(backend, gate, endpoint);
   const transport = new StreamableHTTPServerTransport({
@@ -118,5 +136,7 @@ const httpServer = createServer(async (request, response) => {
 });
 
 httpServer.listen(port, host, () => {
-  console.info(`OpsPilot MCP listening on http://${host}:${port} (role-scoped endpoints)`);
+  console.info(
+    `OpsPilot MCP listening on http://${host}:${port} (role-scoped endpoints)`,
+  );
 });

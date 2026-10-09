@@ -1,0 +1,55 @@
+.persistent-tasks {
+  grid-column: 1 / -1;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e1eae8;
+  font-size: 12px;
+}
+.persistent-tasks > p {
+  color: #75878b;
+  line-height: 1.7;
+}
+.followup-task {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #dbe8e4;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.followup-task small {
+  display: block;
+  color: #809191;
+  font-size: 10px;
+  margin-top: 6px;
+}
+.followup-task p,
+.followup-task blockquote {
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+.task-candidate {
+  padding: 10px 0;
+  border-bottom: 1px solid #e3efeb;
+}
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.task-actions button {
+  border: 1px solid #d4e4de;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #f0f8f5;
+  color: #26766b;
+  cursor: pointer;
+}
+.task-actions button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.task-audit {
+  padding-left: 16px;
+  color: #6a8082;
+}

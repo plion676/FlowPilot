@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage
+from langchain_core.utils.function_calling import convert_to_openai_tool
 from openai import BadRequestError
 from pydantic import Field
 
@@ -18,6 +19,10 @@ class ToolCallingFakeModel(FakeMessagesListChatModel):
     bound_names: list[str] = Field(default_factory=list)
 
     def bind_tools(self, tools: object, **kwargs: object) -> ToolCallingFakeModel:
+        for tool in tools:
+            convert_to_openai_tool(
+                tool
+            )  # Fake models must also enforce provider-compatible schemas.
         self.bound_names = [tool.name for tool in tools]
         return self
 

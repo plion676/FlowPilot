@@ -7,7 +7,18 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-SENSITIVE_KEYS = frozenset({"api_key", "authorization", "password", "token", "secret"})
+SENSITIVE_KEYS = frozenset(
+    {
+        "api_key",
+        "authorization",
+        "password",
+        "token",
+        "secret",
+        "lease_token",
+        "lease_hash",
+        "task_grant",
+    }
+)
 
 
 def redact(value: Any) -> Any:

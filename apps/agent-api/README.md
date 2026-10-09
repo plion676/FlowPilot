@@ -11,7 +11,9 @@
 
 3. 打开 `http://127.0.0.1:8000/api/health` 检查配置状态。Key 留空时 `/api/chat` 返回 `LLM_NOT_CONFIGURED`。Agent API 与 MCP 均需设置 `BUSINESS_BASE_URL`、`INTERNAL_SERVICE_TOKEN`，以读取 Go/MySQL 中的绑定；Agent 还需 `MCP_URL` 和与 MCP 相同的 `MCP_CALL_SECRET`（至少 32 字符）。所有服务的启动命令见根目录 README。
 
-目前 `/api/chat` 使用统一 ReAct：根据当前 Agent 的手动绑定加载已接通工具，模型自主回复、追问或组合工具。聊天前置语义 Router 已移除。每次 Tool 调用在 API 和 MCP 分别读取最新绑定并校验。响应的 `route.kind=agent` 只是运行方式标签，`tool_calls` 是实际工具记录；单次调用兼容返回 `data`。支持可选 `skill_name=crm.customer_insight`，也可由模型调用本地 `activate_skill` 控制启用；同一循环随后收紧为三个工具，不增加角色权限。回访审批仍待实现。`X-Demo-Role` 默认 `consultant`，仅用于本地演示。
+目前 `/api/chat` 使用统一 ReAct：根据当前 Agent 的手动绑定加载已接通工具，模型自主回复、追问或组合工具。聊天前置语义 Router 已移除。每次 Tool 调用在 API 和 MCP 分别读取最新绑定并校验。响应的 `route.kind=agent` 只是运行方式标签，`tool_calls` 是实际工具记录；单次调用兼容返回 `data`。支持可选 `skill_name=crm.customer_insight` 或 `crm.followup_workflow`，也可由模型调用本地 `activate_skill` 控制启用；Skill 不增加角色权限。洞察在原循环中收紧为三个工具，回访创建持久化 Task 并由后台受限 ReAct 提案，批准后由确定性 Worker 经 MCP 提交。`X-Demo-Role` 默认 `consultant`，仅用于本地演示。
+
+Task API：`POST /api/tasks` 接受 UUID `idempotency_key`，`GET /api/tasks` / `/{id}` / `/{id}/audit` 查询，`POST /api/tasks/{id}/decision` 接受 `decision=approve|reject|cancel`、整数 `expected_version`、UUID `idempotency_key`，禁止额外字段。模拟用户由服务端固定，不接受请求体指定审批人、角色或执行证明。仅本机 development 开放；不是生产认证。`TASK_WORKER_ENABLED=0` 用于手动联调，正常开发默认 `1`。MySQL 事实存储由 Go 提供，不允许 Agent 直接查表；状态、租约与恢复规则见根 README 和回访增量规格。
 
 `POST /internal/knowledge/search` 要求内部服务令牌和严格 `query/top_k`，使用本地 FastEmbed BGE 中文模型与 Qdrant；不暴露为管理功能、不直连业务表。先按根 README 启动向量库、运行 `index-sop`，再手动绑定知识工具。当前轮次证据账本把真实片段的 `source_id` 传给模型；最终 JSON 的引用身份、原文和轮次由服务端校验，前端只展示服务端提供的元数据。无匹配、依赖失败或伪造引用时不返回成功建议。这个校验不是自然语言语义蕴含证明。
 

@@ -23,6 +23,9 @@ function mockApi(chatPayload: unknown = overview, chatStatus = 200) {
     if (String(input) === "/api/health") {
       return Response.json({ status: "ok", llm: "configured" });
     }
+    if (String(input) === "/api/tasks") {
+      return Response.json({ tasks: [] });
+    }
     return Response.json(chatPayload, { status: chatStatus });
   });
   vi.stubGlobal("fetch", mocked);
@@ -30,6 +33,39 @@ function mockApi(chatPayload: unknown = overview, chatStatus = 200) {
 }
 
 describe("OpsPilot current frontend slice", () => {
+  it("opens a Trace deep link after the app is already mounted", async () => {
+    window.history.replaceState(null, "", "#top");
+    const id = "11111111-1111-4111-8111-111111111111";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const path = String(input);
+        if (path.startsWith("/api/traces/"))
+          return Response.json({
+            trace: {
+              trace_id: id,
+              request_id: id,
+              status: "succeeded",
+              role: "consultant",
+              model: "fake",
+              last_sequence: 0,
+            },
+            events: [],
+            has_more: false,
+          });
+        if (path.startsWith("/api/traces")) return Response.json({ traces: [], has_more: false });
+        return Response.json(
+          path === "/api/health" ? { status: "ok", llm: "configured" } : { tasks: [] },
+        );
+      }),
+    );
+    render(<App />);
+    window.location.hash = `#trace/${id}`;
+    await screen.findByRole("heading", { name: "执行 Trace." });
+    await screen.findByRole("heading", { name: "已完成" });
+    expect(screen.getByLabelText("Trace 时间线")).toHaveTextContent(id);
+    window.history.replaceState(null, "", "#top");
+  });
   it("explicitly requests insight after selecting its shortcut", async () => {
     const fetched = mockApi({ ...overview, skill_name: "crm.customer_insight" });
     const user = userEvent.setup();
@@ -46,7 +82,7 @@ describe("OpsPilot current frontend slice", () => {
     const user = userEvent.setup();
     render(<App />);
     expect(screen.getByRole("button", { name: "客户洞察，填入提问" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "回访计划，尚未接通" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "回访计划，填入提问" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "客户概览，填入提问" }));
     expect(screen.getByRole("textbox", { name: "输入业务问题" })).toHaveValue(
       "查询客户 C1001 的基础信息",
@@ -111,7 +147,8 @@ describe("OpsPilot current frontend slice", () => {
     expect(screen.getByText("先核实未关闭工单。")).toBeInTheDocument();
     expect(screen.getByText(/版本 1\.0/)).toBeInTheDocument();
     expect(screen.getByText(/版本 1\.0 · business/)).toBeInTheDocument();
-    expect(screen.getByText("pending_approval")).toBeInTheDocument();
+    expect(screen.getByText("任务已提交")).toBeInTheDocument();
+    expect(screen.queryByText("pending_approval")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /批准|拒绝|取消/ })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("task-01")).toBeInTheDocument());
   });

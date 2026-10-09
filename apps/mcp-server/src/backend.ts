@@ -1,7 +1,15 @@
 import { z } from "zod";
-import type { BindingReader } from "./security.js";
+import type {
+  BindingReader,
+  TaskExecutionContext,
+  TaskGrantReader,
+} from "./security.js";
 
 export interface ToolBackend {
+  commitFollowupPlan?(input: {
+    operation: "commit";
+    task_id: string;
+  }): Promise<unknown>;
   getCustomerOverview(input: { customer_id: string }): Promise<unknown>;
   listOpenTickets(input: { customer_id: string }): Promise<unknown>;
   getWorkOrderStatus(input: { work_order_id: string }): Promise<unknown>;
@@ -12,6 +20,68 @@ export interface ToolBackend {
     window_start: string;
     window_end: string;
   }): Promise<unknown>;
+}
+
+export function goTaskGrantReader(
+  baseUrl: string,
+  serviceToken: string,
+): TaskGrantReader {
+  return async (context, operation) => {
+    if (!context.task_grant) throw new Error("APPROVAL_REQUIRED");
+    await workflowPost(
+      baseUrl,
+      serviceToken,
+      context,
+      "internal/workflow/authorize",
+      { operation },
+    );
+  };
+}
+async function workflowPost(
+  baseUrl: string,
+  token: string,
+  context: TaskExecutionContext,
+  path: string,
+  extra: Record<string, unknown>,
+) {
+  let response: Response;
+  try {
+    response = await fetch(new URL(path, baseUrl), {
+      method: "POST",
+      redirect: "error",
+      signal: AbortSignal.timeout(5000),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Service-Token": token,
+        "X-Request-ID": context.request_id,
+      },
+      body: JSON.stringify({
+        role: context.role,
+        actor_id: context.actor_id,
+        endpoint_id: context.endpoint_id,
+        grant: context.task_grant,
+        ...extra,
+      }),
+    });
+  } catch {
+    throw new Error("DEPENDENCY_UNAVAILABLE");
+  }
+  const body = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  > & { error?: { code?: unknown } };
+  if (!response.ok) {
+    const code = body.error?.code;
+    if (
+      typeof code === "string" &&
+      /^(APPROVAL_REQUIRED|TASK_EXPIRED|TASK_CONFLICT|LEASE_LOST|CUSTOMER_CHANGED|CANDIDATE_LIMIT_REACHED|BINDING_CHANGED|FORBIDDEN_TOOL|NOT_FOUND|INVALID_ARGUMENTS)$/.test(
+        code,
+      )
+    )
+      throw new Error(code);
+    throw new Error("DEPENDENCY_UNAVAILABLE");
+  }
+  return body;
 }
 
 const bindingSchema = z.object({
@@ -77,6 +147,7 @@ export function goReadBackend(
   serviceToken: string,
   requestId: string,
   ragBaseUrl = process.env.RAG_BASE_URL ?? "http://127.0.0.1:8000/",
+  workflowContext?: TaskExecutionContext,
 ): ToolBackend {
   const base = new URL(baseUrl);
   if (
@@ -165,6 +236,25 @@ export function goReadBackend(
       }
       return response.json();
     },
-    proposeFollowupPlan: unavailable,
+    proposeFollowupPlan: async (input) => {
+      if (!workflowContext?.task_grant) throw new Error("APPROVAL_REQUIRED");
+      return workflowPost(
+        baseUrl,
+        serviceToken,
+        workflowContext,
+        "internal/workflow/followup",
+        { input },
+      );
+    },
+    commitFollowupPlan: async (input) => {
+      if (!workflowContext?.task_grant) throw new Error("APPROVAL_REQUIRED");
+      return workflowPost(
+        baseUrl,
+        serviceToken,
+        workflowContext,
+        "internal/workflow/followup",
+        { input },
+      );
+    },
   };
 }

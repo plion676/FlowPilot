@@ -19,11 +19,23 @@ parser.add_argument(
         "verify-bindings",
         "verify-insight",
         "index-sop",
+        "seed-followup",
+        "verify-followup",
+        "verify-trace",
     ],
 )
 args = parser.parse_args()
 load_dotenv(root / ".env", override=False)
 commands = {
+    "verify-trace": (
+        "agent-api",
+        [sys.executable, "-m", "pytest", "tests/test_trace_integration.py", "-q", "-s"],
+    ),
+    "seed-followup": ("business-service", ["go", "run", "./cmd/seed-followup"]),
+    "verify-followup": (
+        "agent-api",
+        [sys.executable, "-m", "pytest", "tests/test_followup_integration.py", "-q"],
+    ),
     "index-sop": ("agent-api", [sys.executable, "-m", "app.rag.ingest"]),
     "business": ("business-service", ["go", "run", "./cmd/server"]),
     "mcp": ("mcp-server", ["node", "dist/index.js"]),
@@ -50,7 +62,7 @@ commands = {
         [sys.executable, "-m", "pytest", "tests/test_insight_integration.py", "-q"],
     ),
 }
-if args.service in {"verify-bindings", "verify-insight"}:
+if args.service in {"verify-bindings", "verify-insight", "verify-followup", "verify-trace"}:
     for target, source in {
         "OPSPILOT_TEST_MCP_URL": "MCP_URL",
         "OPSPILOT_TEST_MCP_SECRET": "MCP_CALL_SECRET",
